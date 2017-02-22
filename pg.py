@@ -13,11 +13,11 @@ class PGAgent:
         self.action_size = action_size
         self.gamma = 0.99
         self.learning_rate = 0.001
-        self.model = self._build_model()
         self.xs = []
         self.dlogps = []
         self.drs = []
         self.probs = []
+        self.model = self._build_model()
 
     def _build_model(self):
         model = Sequential()
@@ -25,7 +25,8 @@ class PGAgent:
         model.add(Convolution2D(32, 9, 9, subsample=(4, 4), border_mode='same',
                                 activation='relu', init='he_uniform'))
         model.add(Flatten())
-        model.add(Dense(16, activation='relu', init='he_uniform'))
+        model.add(Dense(128, activation='relu', init='he_uniform'))
+        model.add(Dense(64, activation='relu', init='he_uniform'))
         model.add(Dense(self.action_size, activation='softmax'))
         opt = Adam(lr=self.learning_rate)
         model.compile(loss='categorical_crossentropy', optimizer=opt)
@@ -46,15 +47,15 @@ class PGAgent:
         action = np.random.choice(self.action_size, 1, p=prob)[0]
         return action, prob
 
-    def discount_rewards(self, r):
-        discounted_r = np.zeros_like(r)
+    def discount_rewards(self, rewards):
+        discounted_rewards = np.zeros_like(rewards)
         running_add = 0
-        for t in reversed(range(0, r.size)):
-            if r[t] != 0:
+        for t in reversed(range(0, rewards.size)):
+            if rewards[t] != 0:
                 running_add = 0
-            running_add = running_add * self.gamma + r[t]
-            discounted_r[t] = running_add
-        return discounted_r
+            running_add = running_add * self.gamma + rewards[t]
+            discounted_rewards[t] = running_add
+        return discounted_rewards
 
     def train(self):
         epdlogp = np.vstack(self.dlogps)
@@ -62,10 +63,9 @@ class PGAgent:
         rewards = self.discount_rewards(epr)
         rewards = rewards / np.std(rewards - np.mean(rewards))
         epdlogp *= rewards
-        # Slowly prepare the training batch
+        # Prepare the training batch
         X = np.squeeze(np.vstack([self.xs]))
         y = np.squeeze(np.vstack([epdlogp]))
-        # Periodically update the model
         Y = self.probs + self.learning_rate * y
         self.model.train_on_batch(X, Y)
         # Clear the batch
@@ -97,9 +97,11 @@ if __name__ == "__main__":
     state_size = 80 * 80
     action_size = env.action_space.n
     agent = PGAgent(state_size, action_size)
+    print('loading...')
+    agent.load('pong.h5')
 
     while True:
-        # env.render()
+        env.render()
 
         # Preprocess, consider the frame difference as features
         cur_x = pong_preprocess_screen(state)
@@ -122,4 +124,4 @@ if __name__ == "__main__":
             state = env.reset()
             prev_x = None
             if episode > 1 and episode % 10 == 0:
-                agent.save('pong_model_checkpoint.h5')
+                agent.save('pong.h5')
