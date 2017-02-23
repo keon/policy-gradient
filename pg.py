@@ -7,17 +7,17 @@ from keras.layers.convolutional import Convolution2D
 
 
 class PGAgent:
-    # Inspired by https://gist.github.com/karpathy/a4166c7fe253700972fcbc77e4ea32c5
     def __init__(self, state_size, action_size):
         self.state_size = state_size
         self.action_size = action_size
         self.gamma = 0.99
         self.learning_rate = 0.001
-        self.xs = []
-        self.dlogps = []
-        self.drs = []
+        self.states = []
+        self.gradients = []
+        self.rewards = []
         self.probs = []
         self.model = self._build_model()
+        self.model.summary()
 
     def _build_model(self):
         model = Sequential()
@@ -35,9 +35,9 @@ class PGAgent:
     def remember(self, state, action, prob, reward):
         y = np.zeros([self.action_size])
         y[action] = 1
-        self.dlogps.append(np.array(y).astype('float32') - prob)
-        self.xs.append(state)
-        self.drs.append(reward)
+        self.gradients.append(np.array(y).astype('float32') - prob)
+        self.states.append(state)
+        self.rewards.append(reward)
 
     def act(self, state):
         state = state.reshape([1, state.shape[0]])
@@ -58,18 +58,15 @@ class PGAgent:
         return discounted_rewards
 
     def train(self):
-        epdlogp = np.vstack(self.dlogps)
-        epr = np.vstack(self.drs)
-        rewards = self.discount_rewards(epr)
+        gradients = np.vstack(self.gradients)
+        rewards = np.vstack(self.rewards)
+        rewards = self.discount_rewards(rewards)
         rewards = rewards / np.std(rewards - np.mean(rewards))
-        epdlogp *= rewards
-        # Prepare the training batch
-        X = np.squeeze(np.vstack([self.xs]))
-        y = np.squeeze(np.vstack([epdlogp]))
-        Y = self.probs + self.learning_rate * y
+        gradients *= rewards
+        X = np.squeeze(np.vstack([self.states]))
+        Y = self.probs + self.learning_rate * np.squeeze(np.vstack([gradients]))
         self.model.train_on_batch(X, Y)
-        # Clear the batch
-        self.xs, self.probs, self.dlogps, self.drs = [], [], [], []
+        self.states, self.probs, self.gradients, self.rewards = [], [], [], []
 
     def load(self, name):
         self.model.load_weights(name)
@@ -97,23 +94,19 @@ if __name__ == "__main__":
     state_size = 80 * 80
     action_size = env.action_space.n
     agent = PGAgent(state_size, action_size)
-    print('loading...')
     agent.load('pong.h5')
 
     while True:
-        env.render()
+        # env.render()
 
         # Preprocess, consider the frame difference as features
         cur_x = pong_preprocess_screen(state)
         x = cur_x - prev_x if prev_x is not None else np.zeros(state_size)
         prev_x = cur_x
 
-        # Sample action
         action, prob = agent.act(x)
-
         state, reward, done, info = env.step(action)
         score += reward
-
         agent.remember(x, action, prob, reward)
 
         if done:
