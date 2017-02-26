@@ -22,11 +22,11 @@ class PGAgent:
     def _build_model(self):
         model = Sequential()
         model.add(Reshape((1, 80, 80), input_shape=(self.state_size,)))
-        model.add(Convolution2D(32, 9, 9, subsample=(4, 4), border_mode='same',
+        model.add(Convolution2D(32, 6, 6, subsample=(3, 3), border_mode='same',
                                 activation='relu', init='he_uniform'))
         model.add(Flatten())
-        model.add(Dense(128, activation='relu', init='he_uniform'))
         model.add(Dense(64, activation='relu', init='he_uniform'))
+        model.add(Dense(32, activation='relu', init='he_uniform'))
         model.add(Dense(self.action_size, activation='softmax'))
         opt = Adam(lr=self.learning_rate)
         model.compile(loss='categorical_crossentropy', optimizer=opt)
@@ -74,15 +74,13 @@ class PGAgent:
     def save(self, name):
         self.model.save_weights(name)
 
-
-def pong_preprocess_screen(I):
+def preprocess(I):
     I = I[35:195]
     I = I[::2, ::2, 0]
     I[I == 144] = 0
     I[I == 109] = 0
     I[I != 0] = 1
     return I.astype(np.float).ravel()
-
 
 if __name__ == "__main__":
     env = gym.make("Pong-v0")
@@ -95,12 +93,10 @@ if __name__ == "__main__":
     action_size = env.action_space.n
     agent = PGAgent(state_size, action_size)
     agent.load('pong.h5')
-
     while True:
         # env.render()
 
-        # Preprocess, consider the frame difference as features
-        cur_x = pong_preprocess_screen(state)
+        cur_x = preprocess(state)
         x = cur_x - prev_x if prev_x is not None else np.zeros(state_size)
         prev_x = cur_x
 
@@ -112,6 +108,9 @@ if __name__ == "__main__":
         if done:
             episode += 1
             agent.train()
+            f = open('log.txt', 'r+')
+            f.readline()
+            f.write(str(score) + "\n")
             print('Episode: %d - Score: %f.' % (episode, score))
             score = 0
             state = env.reset()
