@@ -94,7 +94,7 @@ if __name__ == "__main__":
     agent = PGAgent(state_size, action_size)
     agent.load('pong.h5')
     while True:
-        # env.render()
+        env.render()
 
         cur_x = preprocess(state)
         x = cur_x - prev_x if prev_x is not None else np.zeros(state_size)
@@ -108,9 +108,6 @@ if __name__ == "__main__":
         if done:
             episode += 1
             agent.train()
-            f = open('log.txt', 'r+')
-            f.readline()
-            f.write(str(score) + "\n")
             print('Episode: %d - Score: %f.' % (episode, score))
             score = 0
             state = env.reset()
