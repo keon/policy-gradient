@@ -32,7 +32,7 @@ class PGAgent:
         model.compile(loss='categorical_crossentropy', optimizer=opt)
         return model
 
-    def remember(self, state, action, prob, reward):
+    def memorize(self, state, action, prob, reward):
         y = np.zeros([self.action_size])
         y[action] = 1
         self.gradients.append(np.array(y).astype('float32') - prob)
@@ -61,7 +61,7 @@ class PGAgent:
         gradients = np.vstack(self.gradients)
         rewards = np.vstack(self.rewards)
         rewards = self.discount_rewards(rewards)
-        rewards = rewards / np.std(rewards - np.mean(rewards))
+        reward = (reward - np.mean(rewards)) / (np.std(rewards) + 1e-7)
         gradients *= rewards
         X = np.squeeze(np.vstack([self.states]))
         Y = self.probs + self.learning_rate * np.squeeze(np.vstack([gradients]))
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         action, prob = agent.act(x)
         state, reward, done, info = env.step(action)
         score += reward
-        agent.remember(x, action, prob, reward)
+        agent.memorize(x, action, prob, reward)
 
         if done:
             episode += 1
